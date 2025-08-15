@@ -3,39 +3,63 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Restaurant POS (Web)</title>
+  <title>SHUDH DESI • Restaurant POS (Web)</title>
   <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
   <header class="topbar">
-    <h1>🍽️ My Restaurant</h1>
+    <h1>🍽️ SHUDH DESI</h1>
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="menu">My Menu</button>
+      <button class="tab-btn active" data-tab="home">Home</button>
       <button class="tab-btn" data-tab="order">New Order</button>
+      <button class="tab-btn" data-tab="menu">My Menu</button>
       <button class="tab-btn" data-tab="sales">Daily Sales</button>
       <button class="tab-btn" data-tab="edit">Edit Menu</button>
+      <button class="tab-btn" data-tab="edit-sales">Edit Sales Data</button>
     </nav>
   </header>
 
   <main>
+    <!-- Home -->
+    <section id="tab-home" class="tab active">
+      <div class="hero">
+        <div class="hero-title">Welcome to <strong>SHUDH DESI</strong></div>
+        <div class="hero-sub">Fast POS • Works offline • Syncs to Google Sheets</div>
+        <div class="home-buttons">
+          <button class="btn hero-btn" data-goto="order">New Order</button>
+          <button class="btn hero-btn" data-goto="menu">My Menu</button>
+          <button class="btn hero-btn" data-goto="sales">Daily Sales</button>
+          <button class="btn hero-btn" data-goto="edit">Edit Menu</button>
+          <button class="btn hero-btn" data-goto="edit-sales">Edit Sales Data</button>
+        </div>
+      </div>
+    </section>
+
     <!-- My Menu -->
-    <section id="tab-menu" class="tab active">
+    <section id="tab-menu" class="tab">
+      <h2 class="section-title">My Menu</h2>
       <div id="menu-grid" class="grid"></div>
     </section>
 
     <!-- New Order -->
     <section id="tab-order" class="tab">
+      <h2 class="section-title">New Order</h2>
       <div class="order-layout">
         <div class="menu-pane">
-          <h2>Menu</h2>
-          <input id="search" placeholder="Search item..." />
+          <div class="row space-between">
+            <h3>Menu</h3>
+            <input id="search" placeholder="Search item..." />
+          </div>
           <div id="menu-for-order" class="grid"></div>
         </div>
         <div class="cart-pane">
-          <h2>Order Summary</h2>
+          <h3>Order Summary</h3>
           <div id="cart-list" class="cart-list"></div>
           <div class="cart-total">
-            <div>Subtotal: ₹<span id="subtotal">0.00</span></div>
+            <div class="row space-between">
+              <div>Subtotal:</div>
+              <div>₹<span id="subtotal">0.00</span></div>
+            </div>
             <div class="row">
               <button id="clear-cart" class="btn secondary">Clear</button>
               <button id="submit-order" class="btn primary">Submit Order</button>
@@ -49,9 +73,10 @@
 
     <!-- Daily Sales -->
     <section id="tab-sales" class="tab">
+      <h2 class="section-title">Daily Sales</h2>
       <div class="sales-header">
         <div>
-          <label for="sales-date">Date:</label>
+          <label for="sales-date" class="muted">Date:</label>
           <input type="date" id="sales-date"/>
         </div>
         <button id="export-csv" class="btn">Export CSV</button>
@@ -79,7 +104,7 @@
     <!-- Edit Menu -->
     <section id="tab-edit" class="tab">
       <div class="row space-between">
-        <h2>Manage Menu</h2>
+        <h2 class="section-title">Manage Menu</h2>
         <button id="add-item-btn" class="btn primary">+ Add Item</button>
       </div>
       <table class="table">
@@ -97,9 +122,28 @@
         <small class="muted">If a PIN is set, editing/deleting items requires entering the PIN.</small>
       </details>
     </section>
+
+    <!-- Edit Sales Data (local) -->
+    <section id="tab-edit-sales" class="tab">
+      <h2 class="section-title">Edit Sales Data (Local)</h2>
+      <div class="sales-header">
+        <div>
+          <label for="edit-sales-date" class="muted">Date:</label>
+          <input type="date" id="edit-sales-date"/>
+        </div>
+        <div class="row">
+          <button id="refresh-edit-sales" class="btn">Refresh</button>
+        </div>
+      </div>
+
+      <div id="orders-list" class="orders-list"></div>
+      <small class="muted">
+        Changes here update local daily totals only. Already-synced rows in Google Sheets are not edited.
+      </small>
+    </section>
   </main>
 
-  <!-- Modal -->
+  <!-- Item Modal -->
   <dialog id="item-modal">
     <form method="dialog" class="modal">
       <h3 id="modal-title">Add Item</h3>
@@ -120,8 +164,20 @@
     </form>
   </dialog>
 
+  <!-- Done (Order Submitted) Modal -->
+  <dialog id="done-modal">
+    <form method="dialog" class="modal">
+      <h3>Order Submitted 🎉</h3>
+      <p>Order has been synced to Google Sheets and saved locally.</p>
+      <p><small id="done-orderid" class="muted"></small></p>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn primary" value="default">Done</button>
+      </div>
+    </form>
+  </dialog>
+
   <footer class="footer">
-    <span>Built for quick service • Works offline (local storage) • Sync to Google Sheets when online</span>
+    <span>SHUDH DESI • Fast service • Offline-ready • Google Sheets sync</span>
   </footer>
 
   <script src="app.js"></script>
