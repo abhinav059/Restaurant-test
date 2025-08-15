@@ -2,8 +2,8 @@
  * QUICK CONFIG
  **************/
 const CONFIG = {
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzYiZnOeVskXRGb6TLn-i9LgzU4lVdvd0iMhAWkp9j4FNLGa2FGcheogLmX3C30BnLwsA/exec", // <- change this after step 5
-  SHEET_TOKEN: "", // optional shared secret; also set in Apps Script
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzYiZnOeVskXRGb6TLn-i9LgzU4lVdvd0iMhAWkp9j4FNLGa2FGcheogLmX3C30BnLwsA/exec", // <- your /exec URL
+  SHEET_TOKEN: "", // optional shared secret; also set the same in Apps Script if used
   CURRENCY: "₹",
 };
 
@@ -18,7 +18,7 @@ const LS_KEYS = {
 const todayStr = () => new Date().toISOString().slice(0,10);
 const fmt = (n) => Number(n || 0).toFixed(2);
 const byId = (id) => document.getElementById(id);
-const uid = () => crypto.randomUUID();
+const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
 // Default starter menu
 const DEFAULT_MENU = [
@@ -51,16 +51,25 @@ function saveOrdersFor(dateStr, orders) {
   localStorage.setItem(LS_KEYS.ORDERS_PREFIX + dateStr, JSON.stringify(orders));
 }
 
-// --- Tabs
+// --- Tabs (top nav) and Home buttons
 document.querySelectorAll(".tab-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-    btn.classList.add("active");
-    byId("tab-"+btn.dataset.tab).classList.add("active");
-    if (btn.dataset.tab === "sales") refreshSales();
-  });
+  btn.addEventListener("click", () => gotoTab(btn.dataset.tab));
 });
+document.addEventListener("click", (e)=>{
+  const t = e.target.closest(".hero-btn");
+  if (t?.dataset?.goto) gotoTab(t.dataset.goto);
+});
+
+function gotoTab(tabName) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  const btn = [...document.querySelectorAll(".tab-btn")].find(b=>b.dataset.tab===tabName);
+  if (btn) btn.classList.add("active");
+  const panel = byId("tab-"+tabName);
+  if (panel) panel.classList.add("active");
+  if (tabName === "sales") refreshSales();
+  if (tabName === "edit-sales") renderEditSales();
+}
 
 // --- My Menu (read-only view)
 function renderMenuGrid() {
@@ -109,7 +118,9 @@ function renderOrderMenu(filter="") {
     grid.appendChild(el);
   });
 }
-byId("search").addEventListener("input", (e)=> renderOrderMenu(e.target.value));
+if (byId("search")) {
+  byId("search").addEventListener("input", (e)=> renderOrderMenu(e.target.value));
+}
 
 function renderCart() {
   const list = byId("cart-list");
@@ -202,13 +213,20 @@ async function submitOrder() {
     const data = await res.json().catch(()=>({ok:false,error:"Bad JSON"}));
     if (res.ok && data.ok) {
       setStatus("✅ Order submitted & synced.", "ok");
+      // Empty cart
       cart = {};
       renderCart();
-      if (byId("sales-date").value === dateStr) refreshSales(); // update current day
+      // Update sales if viewing that day
+      if (byId("sales-date").value === dateStr) refreshSales();
+      // Show DONE popup with Order ID
+      const done = byId("done-modal");
+      byId("done-orderid").textContent = `Order ID: ${orderId}`;
+      done.showModal();
     } else {
       setStatus("Saved locally. Sync error: " + (data.error || res.statusText), "warn");
     }
   } catch (err) {
+    console.error(err);
     setStatus("Saved locally. Network error—will not auto-resend (manual only).", "warn");
   }
 }
@@ -216,10 +234,10 @@ async function submitOrder() {
 function setStatus(msg, kind="info") {
   const el = byId("submit-status");
   el.textContent = msg;
-  el.style.color = (kind==="ok") ? "#5dd19f" : (kind==="warn" ? "#ff9c9c" : "#8a93a6");
+  el.style.color = (kind==="ok") ? "#2e7d32" : (kind==="warn" ? "#b00020" : "#666");
 }
 
-// --- Sales
+// --- Sales (Daily)
 function refreshSales() {
   const dateFld = byId("sales-date");
   if (!dateFld.value) dateFld.value = todayStr();
@@ -254,7 +272,7 @@ function refreshSales() {
 }
 byId("sales-date").addEventListener("change", refreshSales);
 
-// Export CSV for selected day
+// Export CSV for selected day (from local)
 byId("export-csv").addEventListener("click", ()=>{
   const d = byId("sales-date").value || todayStr();
   const orders = loadOrdersFor(d);
@@ -358,13 +376,110 @@ byId("save-pin").addEventListener("click", ()=>{
     alert("PIN cleared.");
   }
 });
-
 function confirmPinThen(action) {
   const stored = localStorage.getItem(PIN_KEY);
   if (!stored) { action(); return; }
   const entered = prompt("Enter Manager PIN");
   if (entered === stored) action();
   else alert("Incorrect PIN.");
+}
+
+// --- Edit Sales Data (local only)
+const editDateInput = byId("edit-sales-date");
+const refreshEditBtn = byId("refresh-edit-sales");
+const ordersList = byId("orders-list");
+if (editDateInput && refreshEditBtn) {
+  editDateInput.addEventListener("change", renderEditSales);
+  refreshEditBtn.addEventListener("click", renderEditSales);
+}
+function renderEditSales() {
+  if (!editDateInput.value) editDateInput.value = todayStr();
+  const d = editDateInput.value;
+  const orders = loadOrdersFor(d);
+  ordersList.innerHTML = "";
+
+  if (orders.length === 0) {
+    ordersList.innerHTML = `<div class="muted">No orders for ${d}.</div>`;
+    return;
+  }
+
+  orders.forEach((o, idx) => {
+    const wrap = document.createElement("div");
+    wrap.className = "order-card";
+    const ts = new Date(o.createdAtMillis).toLocaleString();
+    wrap.innerHTML = `
+      <div class="row space-between">
+        <div><strong>Order #${idx+1}</strong> <span class="muted">ID: ${o.orderId}</span></div>
+        <div class="muted">${ts}</div>
+      </div>
+      <div class="order-items" id="items-${o.orderId}"></div>
+      <div class="row space-between mt">
+        <div><strong>Total:</strong> ${CONFIG.CURRENCY}${fmt(o.total)}</div>
+        <div class="row">
+          <button class="btn small" data-act="save">Save Changes</button>
+          <button class="btn small danger" data-act="delete">Delete Order</button>
+        </div>
+      </div>
+    `;
+    const itemsHost = wrap.querySelector(`#items-${o.orderId}`);
+
+    // render editable rows
+    o.items.forEach((it, iidx) => {
+      const row = document.createElement("div");
+      row.className = "order-item-row";
+      row.innerHTML = `
+        <div class="muted">${it.name}</div>
+        <input type="number" min="0" step="1" value="${it.qty}" data-field="qty"/>
+        <input type="number" min="0" step="0.01" value="${it.price}" data-field="price"/>
+        <div class="muted">Line: ${CONFIG.CURRENCY}<span data-field="line">${fmt(it.lineTotal)}</span></div>
+        <button class="btn small danger" data-act="remove">x</button>
+      `;
+      const qtyI = row.querySelector('input[data-field="qty"]');
+      const priceI = row.querySelector('input[data-field="price"]');
+      const lineSpan = row.querySelector('span[data-field="line"]');
+      const recalc = ()=>{
+        const q = Number(qtyI.value||0);
+        const p = Number(priceI.value||0);
+        const lt = q * p;
+        lineSpan.textContent = fmt(lt);
+      };
+      qtyI.addEventListener("input", recalc);
+      priceI.addEventListener("input", recalc);
+      row.querySelector('[data-act="remove"]').addEventListener("click", ()=>{
+        row.remove();
+      });
+      itemsHost.appendChild(row);
+    });
+
+    wrap.querySelector('[data-act="save"]').addEventListener("click", ()=>{
+      // gather new items from DOM
+      const newItems = [...itemsHost.querySelectorAll(".order-item-row")].map(r=>{
+        const name = r.querySelector(".muted").textContent;
+        const qty = Number(r.querySelector('input[data-field="qty"]').value||0);
+        const price = Number(r.querySelector('input[data-field="price"]').value||0);
+        return { name, qty, price, lineTotal: qty*price };
+      }).filter(x=>x.qty>0);
+      o.items = newItems;
+      o.total = newItems.reduce((s,x)=> s+x.lineTotal, 0);
+
+      // persist local
+      orders[idx] = o;
+      saveOrdersFor(d, orders);
+      alert("Saved locally. (Sheets not modified)");
+      renderEditSales(); // re-render
+      if (byId("sales-date").value === d) refreshSales();
+    });
+
+    wrap.querySelector('[data-act="delete"]').addEventListener("click", ()=>{
+      if (!confirm("Delete this order locally? (Sheets not modified)")) return;
+      orders.splice(idx,1);
+      saveOrdersFor(d, orders);
+      renderEditSales();
+      if (byId("sales-date").value === d) refreshSales();
+    });
+
+    ordersList.appendChild(wrap);
+  });
 }
 
 // --- Initial render
@@ -375,3 +490,7 @@ function renderAll() {
   renderEditTable();
 }
 renderAll();
+
+// Default dates on first load
+if (byId("sales-date") && !byId("sales-date").value) byId("sales-date").value = todayStr();
+if (byId("edit-sales-date") && !byId("edit-sales-date").value) byId("edit-sales-date").value = todayStr();
